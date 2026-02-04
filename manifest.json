@@ -1,0 +1,20 @@
+
+{
+  "name": "Rebaixa Pro",
+  "short_name": "Rebaixa",
+  "description": "Gerenciador de Rebaixa de Preços e Solicitação de Produtos",
+  "start_url": "index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#1d4ed8",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/1162/1162456.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
