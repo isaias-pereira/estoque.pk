@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'rebaixa-pro-v1';
+const CACHE_NAME = 'estoque-pro-v1';
 const ASSETS = [
   './',
   './index.html',

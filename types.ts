@@ -14,4 +14,16 @@ export interface OrderItem {
   precoSugerido: number;
 }
 
+export interface User {
+  login: string;
+  nome: string;
+  perfil: 'admin' | 'user';
+}
+
+export interface AppSheetConfig {
+  appId: string;
+  accessKey: string;
+  tableName: string;
+}
+
 export type AppScreen = 'inventory' | 'order';

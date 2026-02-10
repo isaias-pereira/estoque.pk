@@ -1,8 +1,8 @@
 
 {
-  "name": "Rebaixa Pro",
-  "short_name": "Rebaixa",
-  "description": "Gerenciador de Rebaixa de Preços e Solicitação de Produtos",
+  "name": "Estoque Pro",
+  "short_name": "EstoquePro",
+  "description": "Gerenciador de Estoque e Solicitação de Produtos",
   "start_url": "index.html",
   "scope": "./",
   "display": "standalone",

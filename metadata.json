@@ -1,6 +1,5 @@
-
 {
-  "name": "Rebaixa Pro",
-  "description": "Aplicativo para importação de planilhas de produtos, consulta de estoque e montagem de listas de rebaixa com envio automatizado por e-mail.",
+  "name": "Estoque Pro",
+  "description": "Aplicativo para importação de planilhas de produtos, consulta de estoque e montagem de listas de pedidos com envio automatizado por e-mail.",
   "requestFramePermissions": []
 }
