@@ -122,14 +122,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onLogin }) => {
                 )}
               </button>
             </form>
-
-            <div className="pt-4 flex flex-col items-center gap-1 border-t border-slate-100">
-               <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest">Credenciais de Teste</span>
-               <div className="flex gap-4">
-                 <span className="text-[10px] font-bold text-slate-400">Admin: admin/123</span>
-                 <span className="text-[10px] font-bold text-slate-400">User: user/123</span>
-               </div>
-            </div>
           </div>
         </div>
       </div>

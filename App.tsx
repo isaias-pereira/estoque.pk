@@ -1,10 +1,11 @@
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { PackageSearch, ShoppingCart, BadgePercent, Upload, AlertCircle, CheckCircle2, LogOut, Cloud, Settings, X, Save, RefreshCw, ShieldCheck, User as UserIcon } from 'lucide-react';
-import { Product, OrderItem, AppScreen, User, AppSheetConfig } from './types';
+import React, { useState, useCallback, useEffect } from 'react';
+import { PackageSearch, ShoppingCart, BadgePercent, AlertCircle, CheckCircle2, LogOut, Settings, X, Save, RefreshCw, ShieldCheck, User as UserIcon, Link as LinkIcon, Database, HardDrive, FileUp } from 'lucide-react';
+import { Product, OrderItem, AppScreen, User, GoogleDriveConfig } from './types';
 import InventoryScreen from './components/InventoryScreen';
 import OrderScreen from './components/OrderScreen';
 import LoginScreen from './components/LoginScreen';
+import ImportScreen from './components/ImportScreen';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
@@ -20,15 +21,10 @@ const App: React.FC = () => {
   const [orderList, setOrderList] = useState<OrderItem[]>([]);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
   
-  const [appSheetConfig, setAppSheetConfig] = useState<AppSheetConfig>(() => {
-    const saved = localStorage.getItem('estoque-pro-appsheet');
-    const defaults = { 
-      appId: '792aa598-0137-43ac-83a6-fb9e3195d87d', 
-      accessKey: 'V2-ajwKG-btex2-Wl5DT-ZkJL2-e7R8x-5BsNH-kaumB-RHNy7', 
-      tableName: 'Planilha1' 
-    };
+  const [gdConfig, setGdConfig] = useState<GoogleDriveConfig>(() => {
+    const saved = localStorage.getItem('estoque-pro-google-drive');
+    const defaults = { sharedLink: '' };
     return saved ? JSON.parse(saved) : defaults;
   });
 
@@ -37,58 +33,58 @@ const App: React.FC = () => {
     setTimeout(() => setNotification(null), 3500);
   }, []);
 
-  const syncWithAppSheet = useCallback(async (silent = false) => {
-    if (!appSheetConfig.appId || !appSheetConfig.accessKey || !appSheetConfig.tableName) {
-      if (!silent) {
-        showNotification("Configure as credenciais do AppSheet primeiro.", "warning");
-        setShowConfig(true);
-      }
+  const syncWithGoogleDrive = useCallback(async (silent = false) => {
+    if (!gdConfig.sharedLink) {
+      if (!silent) showNotification("Configure o link do Google Drive primeiro.", "warning");
       return;
     }
 
     setIsSyncing(true);
     try {
-      const response = await fetch(`https://api.appsheet.com/api/v2/apps/${appSheetConfig.appId}/tables/${appSheetConfig.tableName}/Action`, {
-        method: 'POST',
-        headers: {
-          'ApplicationAccessKey': appSheetConfig.accessKey,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          Action: "Find",
-          Properties: { Locale: "pt-BR" },
-          Rows: []
-        })
-      });
-
-      if (!response.ok) throw new Error("Falha na comunicação com AppSheet");
-
-      const data = await response.json();
+      let fileId = '';
+      const driveIdMatch = gdConfig.sharedLink.match(/\/d\/(.+?)\//) || gdConfig.sharedLink.match(/id=(.+?)(&|$)/);
       
-      if (Array.isArray(data)) {
-        const formatted: Product[] = data.map((item: any) => ({
-          codigo: String(item.codigo || item.Codigo || item.ID || item.CÓDIGO || ''),
-          descricao: String(item.descricao || item.Descricao || item.Nome || item.DESCRIÇÃO || ''),
-          estoque: Number(item.estoque || item.Estoque || item.Quantidade || item.ESTOQUE || 0),
-          preco: Number(item.preco || item.Preco || item.Valor || item.PREÇO || 0)
-        })).filter(p => p.codigo !== '');
+      if (driveIdMatch && driveIdMatch[1]) {
+        fileId = driveIdMatch[1];
+      } else {
+        throw new Error("Link do Google Drive inválido.");
+      }
+
+      const downloadUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+      const response = await fetch(downloadUrl);
+      if (!response.ok) throw new Error("Erro ao acessar arquivo no G-Drive.");
+
+      const arrayBuffer = await response.arrayBuffer();
+      const XLSX = (window as any).XLSX;
+      if (!XLSX) throw new Error("Biblioteca XLSX não carregada.");
+
+      const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+      if (Array.isArray(jsonData) && jsonData.length > 0) {
+        const formatted: Product[] = jsonData.map((item: any) => {
+          const findVal = (keys: string[]) => {
+            const match = Object.keys(item).find(k => keys.includes(k.toLowerCase()));
+            return match ? item[match] : null;
+          };
+          return {
+            codigo: String(findVal(['codigo', 'código', 'id', 'sku']) || ''),
+            descricao: String(findVal(['descricao', 'descrição', 'nome', 'produto']) || ''),
+            estoque: Number(findVal(['estoque', 'quantidade', 'qtd', 'stock']) || 0),
+            preco: Number(findVal(['preco', 'preço', 'valor', 'price']) || 0)
+          };
+        }).filter(p => p.codigo !== '');
 
         setProducts(formatted);
-        if (!silent) {
-          showNotification(`${formatted.length} produtos sincronizados do AppSheet!`, 'success');
-        }
-      } else {
-        throw new Error("Formato de dados inválido recebido.");
+        if (!silent) showNotification(`${formatted.length} produtos sincronizados!`, 'success');
       }
-    } catch (error) {
-      console.error(error);
-      if (!silent) {
-        showNotification("Erro ao sincronizar com AppSheet.", "error");
-      }
+    } catch (error: any) {
+      if (!silent) showNotification(error.message || "Erro na sincronização.", "error");
     } finally {
       setIsSyncing(false);
     }
-  }, [appSheetConfig, showNotification]);
+  }, [gdConfig, showNotification]);
 
   useEffect(() => {
     if (user) {
@@ -96,19 +92,8 @@ const App: React.FC = () => {
       const savedOrder = localStorage.getItem('estoque-pro-order');
       if (savedProducts) setProducts(JSON.parse(savedProducts));
       if (savedOrder) setOrderList(JSON.parse(savedOrder));
-      
-      syncWithAppSheet(true);
     }
-  }, [user, syncWithAppSheet]);
-
-  useEffect(() => {
-    if (user) {
-      const intervalId = setInterval(() => {
-        syncWithAppSheet(true);
-      }, 86400000); 
-      return () => clearInterval(intervalId);
-    }
-  }, [user, syncWithAppSheet]);
+  }, [user]);
 
   useEffect(() => {
     if (user) {
@@ -124,22 +109,11 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
-    const isAdmin = user?.perfil === 'admin';
-    const message = isAdmin ? 'Deseja realmente sair do sistema?' : 'Deseja trocar de usuário?';
-    
-    if (confirm(message)) {
+    if (confirm('Deseja realmente sair?')) {
       localStorage.removeItem('estoque-pro-session');
       setUser(null);
       setCurrentScreen('inventory');
     }
-  };
-
-  const saveAppSheetConfig = (e: React.FormEvent) => {
-    e.preventDefault();
-    localStorage.setItem('estoque-pro-appsheet', JSON.stringify(appSheetConfig));
-    setShowConfig(false);
-    showNotification("Configurações salvas!", "success");
-    syncWithAppSheet();
   };
 
   if (!user) return <LoginScreen onLogin={handleLogin} />;
@@ -166,18 +140,13 @@ const App: React.FC = () => {
           </div>
           
           <nav className="flex flex-wrap justify-center gap-2 items-center">
-            <button 
-              onClick={() => syncWithAppSheet()} 
-              disabled={isSyncing}
-              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${isSyncing ? 'bg-blue-600/20 text-blue-400' : 'hover:bg-slate-800 text-blue-400'}`}
-            >
-              <Cloud className={`w-4 h-4 ${isSyncing ? 'animate-bounce' : ''}`} />
-              <span className="hidden sm:inline">{isSyncing ? 'Sincronizando...' : 'Atualizar Base'}</span>
-            </button>
-
             {isAdmin && (
-              <button onClick={() => setShowConfig(true)} className="p-2.5 rounded-xl hover:bg-slate-800 text-slate-400 transition-colors" title="Configurar AppSheet">
-                <Settings className="w-4 h-4" />
+              <button 
+                onClick={() => setCurrentScreen('import')} 
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${currentScreen === 'import' ? 'bg-white text-slate-900 shadow-lg' : 'hover:bg-slate-800 text-blue-400'}`}
+              >
+                <FileUp className="w-4 h-4" />
+                <span className="hidden sm:inline">Atualizar Base</span>
               </button>
             )}
 
@@ -199,47 +168,12 @@ const App: React.FC = () => {
             <button 
               onClick={handleLogout} 
               className={`p-2.5 rounded-xl transition-colors text-white shadow-lg ${isAdmin ? 'bg-slate-800 hover:bg-rose-600' : 'bg-blue-600 hover:bg-blue-700'}`}
-              title={isAdmin ? "Sair do Sistema" : "Trocar Usuário"}
             >
-              {isAdmin ? <LogOut className="w-4 h-4" /> : <UserIcon className="w-4 h-4" />}
+              <LogOut className="w-4 h-4" />
             </button>
           </nav>
         </div>
       </header>
-
-      {showConfig && isAdmin && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in" onClick={() => setShowConfig(false)} />
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl relative z-10 overflow-hidden animate-in zoom-in-95 duration-300">
-            <div className="bg-slate-900 p-8 text-white flex justify-between items-center">
-              <div>
-                <h3 className="text-xl font-black uppercase tracking-tight">Conectar AppSheet</h3>
-                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Configurações de Administrador</p>
-              </div>
-              <button onClick={() => setShowConfig(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            <form onSubmit={saveAppSheetConfig} className="p-8 space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">App ID</label>
-                <input type="text" required value={appSheetConfig.appId} onChange={e => setAppSheetConfig({...appSheetConfig, appId: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold text-slate-700 transition-all" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Access Key</label>
-                <input type="password" required value={appSheetConfig.accessKey} onChange={e => setAppSheetConfig({...appSheetConfig, accessKey: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold text-slate-700 transition-all" />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Nome da Tabela</label>
-                <input type="text" required value={appSheetConfig.tableName} onChange={e => setAppSheetConfig({...appSheetConfig, tableName: e.target.value})} className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:border-blue-500 outline-none font-bold text-slate-700 transition-all" />
-              </div>
-              <button type="submit" className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] hover:bg-blue-700 transition-all shadow-xl flex items-center justify-center gap-3">
-                <Save className="w-4 h-4" /> Salvar Alterações
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
 
       {notification && (
         <div className="fixed top-24 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-top-8 zoom-in-95 duration-300">
@@ -257,12 +191,15 @@ const App: React.FC = () => {
               <span className="text-[10px] font-black uppercase tracking-widest">{user.nome}</span>
            </div>
         </div>
-        {currentScreen === 'inventory' ? (
+
+        {currentScreen === 'inventory' && (
           <InventoryScreen products={products} onGoToOrder={() => setCurrentScreen('order')} onAddToOrder={item => {
             setOrderList(prev => [...prev, item]);
             showNotification('Item adicionado!', 'success');
           }} />
-        ) : (
+        )}
+
+        {currentScreen === 'order' && (
           <OrderScreen 
             user={user}
             products={products} 
@@ -273,22 +210,30 @@ const App: React.FC = () => {
             onClear={() => confirm('Limpar lista?') && setOrderList([])} 
           />
         )}
+
+        {currentScreen === 'import' && isAdmin && (
+          <ImportScreen 
+            productsCount={products.length}
+            gdConfig={gdConfig}
+            onSaveGdConfig={(config) => {
+              setGdConfig(config);
+              localStorage.setItem('estoque-pro-google-drive', JSON.stringify(config));
+            }}
+            onUpdateProducts={(newProducts) => {
+              setProducts(newProducts);
+              showNotification("Base de produtos atualizada com sucesso!", "success");
+              setCurrentScreen('inventory');
+            }}
+            onSyncDrive={() => syncWithGoogleDrive(false)}
+            isSyncing={isSyncing}
+          />
+        )}
       </main>
 
       <footer className="bg-white border-t border-slate-200 py-6">
         <div className="max-w-6xl mx-auto px-4 flex justify-between items-center">
-          <div className="flex items-center gap-2">
-            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">Estoque Pro 2025</p>
-            <div className="h-3 w-px bg-slate-200" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase">{user.perfil} Mode</span>
-          </div>
+          <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">Estoque Pro 2025</p>
           <div className="flex items-center gap-4">
-            {appSheetConfig.appId && (
-              <div className="flex items-center gap-2 opacity-60">
-                <RefreshCw className={`w-3 h-3 text-blue-500 ${isSyncing ? 'animate-spin' : ''}`} />
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Ciclo de 24h</span>
-              </div>
-            )}
             <div className="flex items-center gap-2 opacity-40 grayscale">
               <ShieldCheck className="w-3 h-3 text-emerald-500" />
               <span className="text-[10px] font-bold text-slate-600 uppercase">Seguro</span>

@@ -20,10 +20,8 @@ export interface User {
   perfil: 'admin' | 'user';
 }
 
-export interface AppSheetConfig {
-  appId: string;
-  accessKey: string;
-  tableName: string;
+export interface GoogleDriveConfig {
+  sharedLink: string;
 }
 
-export type AppScreen = 'inventory' | 'order';
+export type AppScreen = 'inventory' | 'order' | 'import';
