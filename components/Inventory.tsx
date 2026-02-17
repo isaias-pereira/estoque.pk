@@ -29,21 +29,28 @@ const Inventory: React.FC<InventoryProps> = ({ base, inventory, onAdd, onClear }
     e.preventDefault();
     setError(null);
     
-    if (inventory.length === 0) {
-      setError('Nenhuma planilha de inventário carregada. Acesse "Base de Dados" para importar.');
+    if (inventory.length === 0 && base.length === 0) {
+      setError('Nenhuma planilha de base ou inventário carregada. O Admin deve importar os dados.');
       return;
     }
 
-    // Busca exclusivamente na planilha de inventário conforme solicitado
-    const found = inventory.find(p => p.codigo === searchCode || p.ean === searchCode);
+    // Busca primeiro na planilha de inventário (prioridade para itens já listados para contagem)
+    let found = inventory.find(p => p.codigo === searchCode || p.ean === searchCode);
+    
+    // Se não encontrar no inventário, busca na base de consulta geral (alimentada pelo admin)
+    if (!found) {
+      const baseProduct = base.find(p => p.codigo === searchCode || p.ean === searchCode);
+      if (baseProduct) {
+        found = { ...baseProduct, quantidade: 0 };
+      }
+    }
     
     if (found) {
       setSelectedProduct(found);
-      // Slight delay to ensure the input is rendered before focusing
       setTimeout(() => qtyInputRef.current?.focus(), 50);
     } else {
       setSelectedProduct(null);
-      setError('Código não encontrado na base de inventário.');
+      setError('Produto não localizado em nenhuma das bases (Consulta ou Inventário).');
       searchInputRef.current?.select();
     }
   };
@@ -57,13 +64,12 @@ const Inventory: React.FC<InventoryProps> = ({ base, inventory, onAdd, onClear }
       quantidade: quantity
     });
 
-    // Reset for the next scan cycle as requested
+    // Reset workflow
     setSelectedProduct(null);
     setSearchCode('');
     setQuantity(1);
     setError(null);
     
-    // Return focus to the search input for the next scan
     setTimeout(() => {
       searchInputRef.current?.focus();
     }, 50);
@@ -116,13 +122,13 @@ const Inventory: React.FC<InventoryProps> = ({ base, inventory, onAdd, onClear }
             value={searchCode}
             onChange={(e) => setSearchCode(e.target.value.replace(/\D/g, ''))}
             className="flex-grow px-5 py-4 rounded-2xl border border-slate-200 bg-slate-50/30 focus:bg-white text-black font-medium outline-none transition-all focus:ring-4 focus:ring-indigo-500/10"
-            placeholder="Buscar EAN ou Código na Planilha de Inventário..."
+            placeholder="EAN ou Código (Consulta Base Geral)..."
           />
           <button
             type="submit"
             className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-10 rounded-2xl transition-all shadow-md active:scale-95 whitespace-nowrap"
           >
-            Consultar
+            Buscar
           </button>
         </form>
 
@@ -136,19 +142,19 @@ const Inventory: React.FC<InventoryProps> = ({ base, inventory, onAdd, onClear }
           <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-100 animate-fadeIn">
             <div className="grid md:grid-cols-2 gap-6 items-end">
               <div>
-                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">Produto na Base de Inventário</span>
+                <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">Identificado na Base de Dados</span>
                 <p className="text-lg font-black text-indigo-900 leading-tight">{selectedProduct.descricao}</p>
                 <div className="flex gap-4 mt-1">
                   <p className="text-xs text-indigo-500 font-bold uppercase">EAN: {selectedProduct.ean}</p>
                   <p className="text-xs text-indigo-500 font-bold uppercase">SKU: {selectedProduct.codigo}</p>
                 </div>
                 <div className="mt-3 inline-block bg-white px-3 py-1 rounded-full border border-indigo-100">
-                  <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest">Contagem acumulada: {selectedProduct.quantidade}</p>
+                  <p className="text-[10px] text-indigo-400 font-black uppercase tracking-widest">Contagem atual: {selectedProduct.quantidade}</p>
                 </div>
               </div>
               <form onSubmit={handleAddCount} className="flex gap-4">
                 <div className="flex-grow">
-                  <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">Quantidade a Somar</label>
+                  <label className="text-[10px] font-black text-indigo-400 uppercase tracking-widest block mb-1">Quantidade</label>
                   <input
                     type="number"
                     ref={qtyInputRef}
@@ -172,9 +178,18 @@ const Inventory: React.FC<InventoryProps> = ({ base, inventory, onAdd, onClear }
 
       {/* Tabela de Itens Contados */}
       <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="bg-slate-50 px-8 py-4 border-b border-slate-100 flex justify-between items-center">
-          <h3 className="text-sm font-black text-slate-500 uppercase tracking-widest">Itens Contados (Qtd > 0)</h3>
-          <span className="bg-slate-200 text-slate-600 text-[10px] font-black px-3 py-1 rounded-full">{countedList.length} SKUs</span>
+        <div className="bg-slate-50 px-8 py-5 border-b border-slate-100 flex justify-between items-center">
+          <div className="flex items-center">
+            <svg className="w-5 h-5 text-slate-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            </svg>
+            <h3 className="text-sm font-black text-slate-600 uppercase tracking-widest">Resumo de Contagem</h3>
+          </div>
+          <div className="flex items-center space-x-2">
+            <span className="bg-indigo-100 text-indigo-700 text-[10px] font-black px-3 py-1 rounded-full uppercase">
+              {countedList.length} Itens Únicos
+            </span>
+          </div>
         </div>
         
         <div className="overflow-x-auto">
@@ -190,7 +205,7 @@ const Inventory: React.FC<InventoryProps> = ({ base, inventory, onAdd, onClear }
             <tbody className="divide-y divide-slate-100">
               {countedList.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-8 py-12 text-center text-slate-400 italic">Nenhum item com contagem realizada.</td>
+                  <td colSpan={4} className="px-8 py-12 text-center text-slate-400 italic">Aguardando primeira contagem...</td>
                 </tr>
               ) : (
                 countedList.map((item, idx) => (
@@ -210,12 +225,12 @@ const Inventory: React.FC<InventoryProps> = ({ base, inventory, onAdd, onClear }
           <div className="p-8 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row justify-end gap-4">
             <button
               onClick={handleFinalize}
-              className="bg-red-50 hover:bg-red-100 text-red-600 font-bold py-3 px-8 rounded-xl transition-all border border-red-200 active:scale-95 flex items-center justify-center"
+              className="bg-white hover:bg-red-50 text-red-500 font-bold py-3 px-8 rounded-xl transition-all border border-slate-200 hover:border-red-200 active:scale-95 flex items-center justify-center shadow-sm"
             >
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
               </svg>
-              Finalizar e Limpar
+              Limpar Lista
             </button>
             <button
               onClick={exportInventory}
@@ -224,7 +239,7 @@ const Inventory: React.FC<InventoryProps> = ({ base, inventory, onAdd, onClear }
               <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 4m4 4v12" />
               </svg>
-              Exportar Apenas Contados (.CSV)
+              Exportar CSV
             </button>
           </div>
         )}
