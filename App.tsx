@@ -60,6 +60,15 @@ const App: React.FC = () => {
     localStorage.setItem(STORAGE_KEY_INVENTORY, JSON.stringify(data));
   }, []);
 
+  const handleClearDatabase = useCallback(() => {
+    setConsultationBase([]);
+    setInventoryList([]);
+    setLastUpdateConsultation(null);
+    localStorage.removeItem(STORAGE_KEY_CONSULTATION);
+    localStorage.removeItem(STORAGE_KEY_INVENTORY);
+    localStorage.removeItem(STORAGE_KEY_LAST_UPDATE);
+  }, []);
+
   const handleAddItemToInventory = (item: InventoryItem) => {
     setInventoryList(prev => {
       let newList;
@@ -125,6 +134,7 @@ const App: React.FC = () => {
               <Database 
                 onUploadConsultation={handleUpdateConsultation} 
                 onUploadInventory={handleUpdateInventory}
+                onClearDatabase={handleClearDatabase}
                 onBack={() => setCurrentView('consulta')} 
               />
             )}
